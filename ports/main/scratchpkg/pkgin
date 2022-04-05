@@ -1,0 +1,51 @@
+#!/bin/sh
+#
+# - a simple wrapper script for pkgbuild for bootstrap
+# - will build, install, upgrade and other operation without 'cd' into each port directory
+# - port will be search automatically follow REPO order, port found first will be selected
+# - does not solve dependency
+#
+# usage:
+#    pkgin [port names] [pkgmk options]
+#
+
+trap "exit 1" 1 2 3 15
+
+REPO="/usr/ports/main /usr/ports/multilib"
+
+while [ $1 ]; do
+	case $1 in
+		-*) PKGBUILD_CMD="$PKGBUILD_CMD $1";;
+		*) PKG="$PKG $1";;
+	esac
+	shift
+done
+
+if [ ! "$PKG" ]; then
+	echo "Please provide port name to install."
+	exit 1
+fi
+
+for p in $PKG; do
+	if [ -d /var/lib/scratchpkg/db/$p ]; then
+		echo "Package '$p' is installed."
+		continue
+	fi
+	PKGFOUND=no
+	for r in $REPO; do
+		if [ -f $r/$p/spkgbuild ]; then
+			PKGFOUND=yes
+			cd $r/$p >/dev/null
+			pkgbuild $PKGBUILD_CMD || exit $?
+			[ -e bootstrap-post-install.sh ] && sh bootstrap-post-install.sh
+			[ -e post-install.sh ] && sh post-install.sh
+			cd - >/dev/null
+		fi
+	done
+	if [ "$PKGFOUND" = "no" ]; then
+		echo "Port '$p' not found."
+		exit 1
+	fi
+done
+
+exit 0

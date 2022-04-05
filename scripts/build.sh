@@ -66,10 +66,7 @@ umount_cache_and_portsrepo() {
 }
 
 umount_repo() {
-	for repo in $REPO; do
-		unmount $ROOTFS/usr/ports/$repo
-		rm -rf $ROOTFS/usr/ports/$repo
-	done
+	unmount $ROOTFS/usr/ports
 }
 
 unmount_any_mounted() {
@@ -91,13 +88,8 @@ mount_cache_and_portsrepo() {
 }
 
 mount_repo() {
-	for repo in $REPO; do
-		[ -d "$PORTSDIR/$repo" ] || {
-			msgerr "repo not exist: $repo"
-		}
-		mkdir -p "$ROOTFS/usr/ports/$repo"
-		bindmount "$PORTSDIR/$repo" "$ROOTFS/usr/ports/$repo"
-	done
+	mkdir -p "$ROOTFS/usr/ports"
+	bindmount "$PORTSDIR" "$ROOTFS/usr/ports"
 }
 
 fetch_rootfs() {
@@ -153,6 +145,7 @@ compress_rootfs() {
 		--exclude="var/cache/scratchpkg/work/*" \
 		--exclude="*.spkgnew" \
 		--exclude="tmp/*" \
+		--exclude="./tools" \
 		--exclude="root/*" \
 		-cvJpf "$TARBALLIMG" * | while read -r line; do
 			echo -ne " $line\033[0K\r"
@@ -221,8 +214,8 @@ make_iso() {
 	cp "$FILESDIR/splash.png" "$ISODIR/isolinux"
 	sed "s/@RLS@/$RELEASE/g" "$FILESDIR/isolinux.cfg" > "$ISODIR/isolinux/isolinux.cfg"
 	
-	[ -d "$PORTSDIR/virootfs" ] && {
-		cp -aR "$PORTSDIR/virootfs" "$ISODIR"
+	[ -d "$TOPDIR/virootfs" ] && {
+		cp -aR "$TOPDIR/virootfs" "$ISODIR"
 		chown -R 0:0 "$ISODIR/virootfs"
 	}
 	
@@ -240,6 +233,7 @@ make_iso() {
 			-e "$ROOTFS"/var/cache/scratchpkg/work/* \
 			-e "$ROOTFS"/root/* \
 			-e "$ROOTFS"/tmp/* \
+			-e "$ROOTFS"/tools \
 			-e "*.spkgnew" 2>/dev/null || die "Failed create sfs root filesystem"
 			
 	cp "$ROOTFS/boot/vmlinuz-venom" "$ISODIR/boot/vmlinuz" || die "Failed copying kernel"
@@ -465,7 +459,8 @@ main() {
 	return 0
 }
 
-PORTSDIR="$(dirname $(dirname $(realpath $0)))"
+TOPDIR="$(dirname $(dirname $(realpath $0)))"
+PORTSDIR="$TOPDIR/ports"
 SCRIPTDIR="$(dirname $(realpath $0))"
 
 [ -f $SCRIPTDIR/config ] && . $SCRIPTDIR/config
@@ -479,12 +474,12 @@ RELEASE=$(git branch --show-current)
 	RELEASE=current
 }
 
-TARBALLIMG="$PORTSDIR/venomlinux-rootfs-$RELEASE-$ARCH.tar.xz"
-SRCDIR="${SRCDIR:-/var/cache/scratchpkg/sources}"
-PKGDIR="${PKGDIR:-/var/cache/scratchpkg/packages}"
-ROOTFS="${ROOTFS:-$PORTSDIR/rootfs}"
+TARBALLIMG="$TOPDIR/venomlinux-rootfs-$RELEASE-$ARCH.tar.xz"
+SRCDIR="${SRCDIR:-$TOPDIR/output/sources}"
+PKGDIR="${PKGDIR:-$TOPDIR/output/packages}"
+ROOTFS="${ROOTFS:-$TOPDIR/output/rootfs}"
 CCACHE_DIR="${CCACHEDIR:-/var/lib/ccache}"
-FILESDIR="$PORTSDIR/files"
+FILESDIR="$TOPDIR/files"
 JOBS="${JOBS:-$(nproc)}"
 
 REPO="main multilib nonfree testing"
@@ -494,7 +489,7 @@ REPOFILE="$FILESDIR/scratchpkg.repo"
 ISODIR="${ISODIR:-/tmp/venomiso}"
 ISOLABEL="VENOMLIVE_$(date +"%Y%m%d")"
 ISO_PKG="linux-lts,dialog,squashfs-tools,grub-efi,btrfs-progs,reiserfsprogs,xfsprogs,syslinux"
-OUTPUTISO="${OUTPUTISO:-$PORTSDIR/venomlinux-$RELEASE-$ARCH.iso}"
+OUTPUTISO="${OUTPUTISO:-$TOPDIR/output/venomlinux-$RELEASE-$ARCH.iso}"
 
 trap "interrupted" 1 2 3 15
 
